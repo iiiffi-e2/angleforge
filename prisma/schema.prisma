@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String?
+  plan          Plan     @relation(fields: [planId], references: [id])
+  planId        String
+  createdAt     DateTime @default(now())
+  collections   Collection[]
+  usageLogs     UsageLog[]
+}
+
+model Plan {
+  id           String @id @default(uuid())
+  name         String
+  dailyLimit   Int
+  monthlyPrice Int
+  users        User[]
+}
+
+model Collection {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  angles    Angle[]
+}
+
+model Angle {
+  id               String      @id @default(uuid())
+  userId           String
+  collectionId     String?
+  angleName        String
+  hook             String
+  headline         String
+  explanation      String
+  visualSuggestion String
+  channel          String
+  audience         String?
+  tone             String
+  goal             String
+  sourceTopic      String
+  createdAt        DateTime    @default(now())
+  collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+}
+
+model UsageLog {
+  id     String   @id @default(uuid())
+  userId String
+  date   DateTime @default(now())
+  count  Int      @default(0)
+  user   User     @relation(fields: [userId], references: [id])
+}
