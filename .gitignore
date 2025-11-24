@@ -45,3 +45,7 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+
+# generated content images
+/public/generated-images/*
+!/public/generated-images/.gitkeep

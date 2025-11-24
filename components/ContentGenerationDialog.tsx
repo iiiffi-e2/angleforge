@@ -30,12 +30,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AngleObject } from "@/lib/openai";
 import { toast } from "sonner";
-import { Copy, Loader2, RefreshCw, Download } from "lucide-react";
+import { Copy, Loader2, RefreshCw, Download, Save } from "lucide-react";
 
 const formSchema = z.object({
-  contentType: z.enum(["LinkedIn Post", "Blog Post", "Email", "Ad Copy", "Social Caption"], {
-    required_error: "Content type is required",
-  }),
+  contentType: z.enum(["LinkedIn Post", "Blog Post", "Email", "Ad Copy", "Social Caption"]),
   length: z.enum(["Short", "Medium", "Long"]).optional(),
   customCTA: z.string().optional(),
   generateImage: z.boolean().optional(),
@@ -47,17 +45,22 @@ interface ContentGenerationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   angle: AngleObject & { sourceTopic?: string };
+  onContentSaved?: () => void;
 }
 
 export function ContentGenerationDialog({
   open,
   onOpenChange,
   angle,
+  onContentSaved,
 }: ContentGenerationDialogProps) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<string | null>(null);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [contentType, setContentType] = useState<string>("");
+  const [currentLength, setCurrentLength] = useState<string>("");
+  const [currentCTA, setCurrentCTA] = useState<string>("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -109,6 +112,8 @@ export function ContentGenerationDialog({
       const result = await response.json();
       setGeneratedContent(result.content);
       setContentType(result.contentType);
+      setCurrentLength(data.length || "");
+      setCurrentCTA(data.customCTA || "");
       if (result.imageUrl) {
         setGeneratedImageUrl(result.imageUrl);
       }
@@ -158,10 +163,59 @@ export function ContentGenerationDialog({
     }
   };
 
+  const handleSave = async () => {
+    if (!angle.id) {
+      toast.error("Please save the angle first before saving generated content.");
+      return;
+    }
+
+    if (!generatedContent) {
+      toast.error("No content to save");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const response = await fetch("/api/content/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          angleId: angle.id,
+          contentType: contentType,
+          content: generatedContent,
+          imageUrl: generatedImageUrl || undefined,
+          length: currentLength || undefined,
+          customCTA: currentCTA || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          toast.error("Content saving is only available for Pro users.");
+          return;
+        }
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to save content");
+      }
+
+      toast.success("Content saved successfully!");
+      if (onContentSaved) {
+        onContentSaved();
+      }
+      // Optionally close dialog or keep it open
+    } catch (error: any) {
+      toast.error(error.message || "Failed to save content");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleClose = () => {
-    if (!isGenerating) {
+    if (!isGenerating && !isSaving) {
       setGeneratedContent(null);
       setGeneratedImageUrl(null);
+      setCurrentLength("");
+      setCurrentCTA("");
       form.reset();
       onOpenChange(false);
     }
@@ -365,11 +419,34 @@ export function ContentGenerationDialog({
               <Button
                 variant="outline"
                 onClick={handleClose}
+                disabled={isSaving}
                 className="flex-1"
               >
                 Close
               </Button>
+              <Button
+                onClick={handleSave}
+                disabled={isSaving || !angle.id}
+                className="flex-1"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Content
+                  </>
+                )}
+              </Button>
             </div>
+            {!angle.id && (
+              <p className="text-sm text-muted-foreground text-center">
+                Save the angle first to save generated content
+              </p>
+            )}
           </div>
         )}
       </DialogContent>

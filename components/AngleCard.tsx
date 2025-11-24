@@ -5,10 +5,11 @@ import { AngleObject } from "@/lib/openai";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Save, CheckCircle2, FileText } from "lucide-react";
+import { Copy, Save, CheckCircle2, FileText, History } from "lucide-react";
 import { toast } from "sonner";
 import { ContentGenerationDialog } from "@/components/ContentGenerationDialog";
 import { UpgradeDialog } from "@/components/UpgradeDialog";
+import { SavedContentDialog } from "@/components/SavedContentDialog";
 
 interface AngleCardProps {
   angle: AngleObject & { sourceTopic?: string };
@@ -20,8 +21,10 @@ interface AngleCardProps {
 
 export function AngleCard({ angle, onSave, isSaved = false, onToggleUsed, userPlan }: AngleCardProps) {
   const [contentDialogOpen, setContentDialogOpen] = useState(false);
+  const [savedContentDialogOpen, setSavedContentDialogOpen] = useState(false);
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [plan, setPlan] = useState<string>("free");
+  const [contentCount, setContentCount] = useState<number>(0);
 
   useEffect(() => {
     if (userPlan) {
@@ -34,6 +37,22 @@ export function AngleCard({ angle, onSave, isSaved = false, onToggleUsed, userPl
         .catch(() => {});
     }
   }, [userPlan]);
+
+  useEffect(() => {
+    // Fetch content count if angle is saved
+    if (angle.id && isSaved) {
+      fetch(`/api/content/${angle.id}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setContentCount(data.length);
+          }
+        })
+        .catch(() => {
+          // Silently fail if content fetch fails
+        });
+    }
+  }, [angle.id, isSaved]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -105,24 +124,79 @@ export function AngleCard({ angle, onSave, isSaved = false, onToggleUsed, userPl
             </Button>
           )}
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full" 
-          onClick={handleGenerateContent}
-        >
-          <FileText className="w-4 h-4 mr-2" /> Generate Content
-        </Button>
+        <div className="flex gap-2 w-full">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex-1" 
+            onClick={handleGenerateContent}
+          >
+            <FileText className="w-4 h-4 mr-2" /> Generate Content
+          </Button>
+          {isSaved && angle.id && contentCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setSavedContentDialogOpen(true)}
+            >
+              <History className="w-4 h-4 mr-2" />
+              View Saved {contentCount > 0 && (
+                <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-xs">
+                  {contentCount}
+                </Badge>
+              )}
+            </Button>
+          )}
+        </div>
+        {isSaved && angle.id && contentCount === 0 && (
+          <div className="text-xs text-muted-foreground text-center mt-1">
+            No saved content yet
+          </div>
+        )}
       </CardFooter>
       <ContentGenerationDialog
         open={contentDialogOpen}
         onOpenChange={setContentDialogOpen}
         angle={angle}
+        onContentSaved={() => {
+          // Refresh content count after saving
+          if (angle.id) {
+            fetch(`/api/content/${angle.id}`)
+              .then((r) => r.json())
+              .then((data) => {
+                if (Array.isArray(data)) {
+                  setContentCount(data.length);
+                }
+              })
+              .catch(() => {});
+          }
+        }}
       />
       <UpgradeDialog
         open={upgradeDialogOpen}
         onOpenChange={setUpgradeDialogOpen}
       />
+      {angle.id && (
+        <SavedContentDialog
+          open={savedContentDialogOpen}
+          onOpenChange={setSavedContentDialogOpen}
+          angleId={angle.id}
+          onContentDeleted={() => {
+            // Refresh content count after deletion
+            if (angle.id) {
+              fetch(`/api/content/${angle.id}`)
+                .then((r) => r.json())
+                .then((data) => {
+                  if (Array.isArray(data)) {
+                    setContentCount(data.length);
+                  }
+                })
+                .catch(() => {});
+            }
+          }}
+        />
+      )}
     </Card>
   );
 }

@@ -54,6 +54,7 @@ model Angle {
   usedAt           DateTime?
   createdAt        DateTime    @default(now())
   collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  generatedContent GeneratedContent[]
 }
 
 model UsageLog {
@@ -62,4 +63,16 @@ model UsageLog {
   date   DateTime @default(now())
   count  Int      @default(0)
   user   User     @relation(fields: [userId], references: [id])
+}
+
+model GeneratedContent {
+  id          String   @id @default(uuid())
+  angleId     String
+  angle        Angle    @relation(fields: [angleId], references: [id], onDelete: Cascade)
+  contentType String
+  content     String
+  imagePath   String?
+  length      String?
+  customCTA   String?
+  createdAt   DateTime @default(now())
 }
