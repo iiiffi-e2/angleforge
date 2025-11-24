@@ -57,3 +57,4 @@ export function UpgradeDialog({ open, onOpenChange }: UpgradeDialogProps) {
   );
 }
 
+

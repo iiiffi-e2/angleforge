@@ -13,3 +13,4 @@ export async function isProUser(userId: string): Promise<boolean> {
   return user.plan.name === "Pro";
 }
 
+
