@@ -2,7 +2,7 @@
 
 import { GenerateForm } from "@/components/GenerateForm";
 import { AngleCard } from "@/components/AngleCard";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AngleObject } from "@/lib/openai";
 import { toast } from "sonner";
 
@@ -10,6 +10,14 @@ export default function GeneratePage() {
   const [angles, setAngles] = useState<AngleObject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentTopic, setCurrentTopic] = useState("");
+  const [plan, setPlan] = useState<string>("free");
+
+  useEffect(() => {
+    fetch("/api/usage")
+      .then((r) => r.json())
+      .then((d) => setPlan(d.plan))
+      .catch(() => {});
+  }, []);
 
   const handleGenerate = async (data: any) => {
     setIsLoading(true);
@@ -52,9 +60,50 @@ export default function GeneratePage() {
       });
       
       if (!res.ok) throw new Error("Failed to save");
+      
+      const savedAngle = await res.json();
+      
+      // Update the angle in state with the saved version (includes id)
+      setAngles(prev => prev.map(a => 
+        a.angleName === angle.angleName && a.hook === angle.hook 
+          ? { ...savedAngle, used: angle.used || false }
+          : a
+      ));
+      
       toast.success("Angle saved to library");
     } catch (error) {
       toast.error("Failed to save angle");
+    }
+  };
+
+  const handleToggleUsed = async (angle: AngleObject) => {
+    // If angle is saved (has id), update via API
+    if (angle.id) {
+      try {
+        const res = await fetch(`/api/angles/${angle.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ used: !angle.used })
+        });
+
+        if (!res.ok) throw new Error("Failed to update");
+
+        const updatedAngle = await res.json();
+        
+        // Update the angle in state
+        setAngles(prev => prev.map(a => a.id === angle.id ? updatedAngle : a));
+        toast.success(updatedAngle.used ? "Marked as used" : "Marked as unused");
+      } catch (error) {
+        toast.error("Failed to update usage status");
+      }
+    } else {
+      // If not saved yet, just update local state
+      setAngles(prev => prev.map(a => 
+        a.angleName === angle.angleName && a.hook === angle.hook
+          ? { ...a, used: !a.used, usedAt: !a.used ? new Date() : null }
+          : a
+      ));
+      toast.success(!angle.used ? "Marked as used" : "Marked as unused");
     }
   };
 
@@ -82,7 +131,14 @@ export default function GeneratePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-10">
           {angles.map((angle, i) => (
-            <AngleCard key={i} angle={angle} onSave={handleSave} />
+            <AngleCard 
+              key={angle.id || i} 
+              angle={{ ...angle, sourceTopic: currentTopic }}
+              onSave={handleSave}
+              isSaved={!!angle.id}
+              onToggleUsed={handleToggleUsed}
+              userPlan={plan}
+            />
           ))}
         </div>
       </main>
