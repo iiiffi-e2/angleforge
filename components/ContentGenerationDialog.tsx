@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AngleObject } from "@/lib/openai";
 import { toast } from "sonner";
-import { Copy, Loader2, RefreshCw } from "lucide-react";
+import { Copy, Loader2, RefreshCw, Download } from "lucide-react";
 
 const formSchema = z.object({
   contentType: z.enum(["LinkedIn Post", "Blog Post", "Email", "Ad Copy", "Social Caption"], {
@@ -38,6 +38,7 @@ const formSchema = z.object({
   }),
   length: z.enum(["Short", "Medium", "Long"]).optional(),
   customCTA: z.string().optional(),
+  generateImage: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -55,6 +56,7 @@ export function ContentGenerationDialog({
 }: ContentGenerationDialogProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<string | null>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [contentType, setContentType] = useState<string>("");
 
   const form = useForm<FormValues>({
@@ -63,12 +65,14 @@ export function ContentGenerationDialog({
       contentType: undefined,
       length: "Medium",
       customCTA: "",
+      generateImage: false,
     },
   });
 
   const onSubmit = async (data: FormValues) => {
     setIsGenerating(true);
     setGeneratedContent(null);
+    setGeneratedImageUrl(null);
 
     try {
       const response = await fetch("/api/content/generate", {
@@ -88,6 +92,7 @@ export function ContentGenerationDialog({
           contentType: data.contentType,
           length: data.length,
           customCTA: data.customCTA,
+          generateImage: data.generateImage || false,
         }),
       });
 
@@ -104,6 +109,9 @@ export function ContentGenerationDialog({
       const result = await response.json();
       setGeneratedContent(result.content);
       setContentType(result.contentType);
+      if (result.imageUrl) {
+        setGeneratedImageUrl(result.imageUrl);
+      }
       toast.success("Content generated successfully!");
     } catch (error: any) {
       toast.error(error.message || "Failed to generate content");
@@ -121,16 +129,39 @@ export function ContentGenerationDialog({
 
   const handleGenerateAgain = () => {
     setGeneratedContent(null);
+    setGeneratedImageUrl(null);
     form.reset({
       contentType: form.getValues("contentType"),
       length: form.getValues("length"),
       customCTA: form.getValues("customCTA"),
+      generateImage: form.getValues("generateImage"),
     });
+  };
+
+  const handleDownloadImage = async () => {
+    if (!generatedImageUrl) return;
+    
+    try {
+      const response = await fetch(generatedImageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `angle-image-${angle.angleName.replace(/\s+/g, "-")}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Image downloaded");
+    } catch (error) {
+      toast.error("Failed to download image");
+    }
   };
 
   const handleClose = () => {
     if (!isGenerating) {
       setGeneratedContent(null);
+      setGeneratedImageUrl(null);
       form.reset();
       onOpenChange(false);
     }
@@ -220,6 +251,31 @@ export function ContentGenerationDialog({
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="generateImage"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={field.onChange}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="cursor-pointer">
+                        Generate Image
+                      </FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        Create an image based on the visual suggestion: "{angle.visualSuggestion}"
+                      </p>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
               <div className="flex gap-2 pt-4">
                 <Button
                   type="button"
@@ -277,6 +333,33 @@ export function ContentGenerationDialog({
                 {generatedContent}
               </pre>
             </div>
+
+            {generatedImageUrl && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm">Generated Image</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDownloadImage}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+                <div className="border rounded-lg overflow-hidden bg-muted/30">
+                  <img
+                    src={generatedImageUrl}
+                    alt={`Generated image for ${angle.angleName}`}
+                    className="w-full h-auto max-h-[400px] object-contain"
+                    onError={(e) => {
+                      toast.error("Failed to load image");
+                      setGeneratedImageUrl(null);
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-2">
               <Button

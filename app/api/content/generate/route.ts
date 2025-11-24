@@ -25,6 +25,7 @@ interface ContentRequest {
   contentType: ContentType;
   length?: Length;
   customCTA?: string;
+  generateImage?: boolean;
 }
 
 function buildPrompt(req: ContentRequest): string {
@@ -201,7 +202,8 @@ export async function POST(req: Request) {
       console.warn("No OpenAI API Key found. Returning mock data.");
       return NextResponse.json({
         contentType: body.contentType,
-        content: `[Mock ${body.contentType} content based on: ${body.angleName}]`
+        content: `[Mock ${body.contentType} content based on: ${body.angleName}]`,
+        imageUrl: body.generateImage ? "https://via.placeholder.com/1024x1024?text=Mock+Image" : null
       });
     }
 
@@ -226,9 +228,44 @@ export async function POST(req: Request) {
       throw new Error("No content returned from OpenAI");
     }
 
+    // Generate image if requested
+    let imageUrl: string | null = null;
+    if (body.generateImage && body.visualSuggestion) {
+      try {
+        // Build image prompt from visual suggestion and angle context
+        const imagePrompt = `Create a professional, high-quality marketing image. 
+        
+Visual concept: ${body.visualSuggestion}
+Theme: ${body.angleName}
+Context: ${body.headline}
+Tone: ${body.tone}
+Channel: ${body.channel}
+${body.audience ? `Target audience: ${body.audience}` : ''}
+
+The image should be visually compelling, modern, and suitable for marketing use. It should clearly represent the visual concept while maintaining a ${body.tone} aesthetic appropriate for ${body.channel}. High resolution, professional quality, engaging composition.`;
+        
+        const imageResponse = await openai.images.generate({
+          model: "dall-e-3",
+          prompt: imagePrompt.trim(),
+          n: 1,
+          size: "1024x1024",
+          quality: "standard",
+        });
+
+        if (imageResponse.data && imageResponse.data[0]?.url) {
+          imageUrl = imageResponse.data[0].url;
+        }
+      } catch (imageError: any) {
+        console.error("Image generation error:", imageError);
+        // Don't fail the entire request if image generation fails
+        // Just log the error and continue without image
+      }
+    }
+
     return NextResponse.json({
       contentType: body.contentType,
-      content: content.trim()
+      content: content.trim(),
+      imageUrl: imageUrl
     });
 
   } catch (error: any) {
@@ -239,4 +276,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
 
