@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PricingTable } from "@/components/PricingTable";
 
 export default function LandingPage() {
   return (
@@ -34,6 +35,10 @@ export default function LandingPage() {
                 </div>
              </div>
         </div>
+      </div>
+
+      <div className="w-full mt-24">
+        <PricingTable />
       </div>
     </div>
   );
