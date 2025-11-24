@@ -19,7 +19,8 @@ export async function POST(req: Request) {
     audience,
     tone,
     goal,
-    sourceTopic
+    sourceTopic,
+    used
   } = body;
 
   if (!angleName || !hook || !sourceTopic) {
@@ -48,7 +49,9 @@ export async function POST(req: Request) {
       audience,
       tone,
       goal,
-      sourceTopic
+      sourceTopic,
+      used: used === true,
+      usedAt: used === true ? new Date() : null
     }
   });
 

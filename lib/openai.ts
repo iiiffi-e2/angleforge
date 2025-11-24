@@ -15,6 +15,7 @@ export interface AngleInput {
 }
 
 export interface AngleObject {
+  id?: string;
   angleName: string;
   hook: string;
   headline: string;
@@ -24,6 +25,8 @@ export interface AngleObject {
   audience?: string;
   tone: string;
   goal: string;
+  used?: boolean;
+  usedAt?: string | Date | null;
 }
 
 export async function generateAngles(input: AngleInput): Promise<AngleObject[]> {

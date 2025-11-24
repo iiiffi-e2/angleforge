@@ -50,6 +50,8 @@ model Angle {
   tone             String
   goal             String
   sourceTopic      String
+  used             Boolean     @default(false)
+  usedAt           DateTime?
   createdAt        DateTime    @default(now())
   collection       Collection? @relation(fields: [collectionId], references: [id], onDelete: Cascade)
 }
