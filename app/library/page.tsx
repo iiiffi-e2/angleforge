@@ -17,6 +17,7 @@ export default function LibraryPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [angles, setAngles] = useState<AngleObject[]>([]);
   const [allAngles, setAllAngles] = useState<AngleObject[]>([]);
+  const [totalAnglesCount, setTotalAnglesCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState("free");
   const [usageFilter, setUsageFilter] = useState<UsageFilter>("all");
@@ -43,6 +44,14 @@ export default function LibraryPage() {
     setLoading(false);
   };
 
+  const fetchTotalAnglesCount = async () => {
+    const res = await fetch("/api/angles");
+    if (res.ok) {
+      const data = await res.json();
+      setTotalAnglesCount(data.length);
+    }
+  };
+
   const applyFilter = (anglesToFilter: AngleObject[], filter: UsageFilter) => {
     if (filter === "all") {
       setAngles(anglesToFilter);
@@ -60,6 +69,7 @@ export default function LibraryPage() {
   useEffect(() => {
     fetch("/api/usage").then(r => r.json()).then(d => setPlan(d.plan)).catch(() => {});
     fetchCollections();
+    fetchTotalAnglesCount();
   }, []);
 
   useEffect(() => {
@@ -81,6 +91,24 @@ export default function LibraryPage() {
         fetchCollections();
     } else {
         toast.error("Failed to create collection");
+    }
+  };
+
+  const handleRenameCollection = async (collectionId: string, newName: string) => {
+    try {
+      const res = await fetch(`/api/collections/${collectionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName })
+      });
+
+      if (!res.ok) throw new Error("Failed to rename collection");
+
+      toast.success("Collection renamed");
+      await fetchCollections();
+      await fetchTotalAnglesCount();
+    } catch (error) {
+      toast.error("Failed to rename collection");
     }
   };
 
@@ -132,6 +160,57 @@ export default function LibraryPage() {
     }
   };
 
+  const handleMoveAngle = async (angleId: string, collectionId: string | null) => {
+    try {
+      // Get the current angle to know which collection it's coming from
+      const currentAngle = allAngles.find(a => a.id === angleId);
+      const sourceCollectionId = currentAngle?.collectionId || null;
+      
+      // Optimistically update the UI - remove the angle from current view immediately
+      // If we're viewing a specific collection and the angle is being moved away, remove it
+      if (selectedId && sourceCollectionId === selectedId && collectionId !== selectedId) {
+        const updatedAllAngles = allAngles.filter(a => a.id !== angleId);
+        setAllAngles(updatedAllAngles);
+        applyFilter(updatedAllAngles, usageFilter);
+      }
+      
+      const res = await fetch(`/api/angles/${angleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId })
+      });
+
+      if (!res.ok) throw new Error("Failed to move angle");
+
+      const updatedAngle = await res.json();
+      
+      // Always refresh the angles list to ensure accurate state
+      // This ensures the angle is removed from the source collection view
+      await fetchAngles();
+      // Refresh total count and collections (to update counts)
+      await fetchTotalAnglesCount();
+      await fetchCollections();
+      
+      const collectionName = collectionId 
+        ? collections.find((c: any) => c.id === collectionId)?.name || "collection"
+        : "All Angles";
+      
+      const sourceCollectionName = sourceCollectionId
+        ? collections.find((c: any) => c.id === sourceCollectionId)?.name || "collection"
+        : "All Angles";
+      
+      if (sourceCollectionId !== collectionId) {
+        toast.success(`Angle moved from ${sourceCollectionName} to ${collectionName}`);
+      } else {
+        toast.success(`Angle moved to ${collectionName}`);
+      }
+    } catch (error) {
+      // On error, refresh to restore correct state
+      await fetchAngles();
+      toast.error("Failed to move angle");
+    }
+  };
+
   return (
     <div className="flex flex-col md:flex-row gap-8 h-[calc(100vh-100px)]">
       <aside className="w-full md:w-64 shrink-0">
@@ -140,6 +219,9 @@ export default function LibraryPage() {
             selectedId={selectedId} 
             onSelect={setSelectedId} 
             onCreate={createCollection}
+            onMoveAngle={handleMoveAngle}
+            onRename={handleRenameCollection}
+            allAnglesCount={totalAnglesCount}
         />
       </aside>
       <main className="flex-1 overflow-y-auto">

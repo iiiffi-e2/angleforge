@@ -69,8 +69,27 @@ export function AngleCard({ angle, onSave, isSaved = false, onToggleUsed, userPl
 
   const isUsed = angle.used === true;
 
+  const handleDragStart = (e: React.DragEvent) => {
+    if (!angle.id) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("application/json", JSON.stringify({ angleId: angle.id }));
+    e.currentTarget.style.opacity = "0.5";
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    e.currentTarget.style.opacity = "";
+  };
+
   return (
-    <Card className={`h-full flex flex-col hover:shadow-md transition-shadow ${isUsed ? 'opacity-75 border-muted' : ''}`}>
+    <Card 
+      className={`h-full flex flex-col hover:shadow-md transition-shadow ${isUsed ? 'opacity-75 border-muted' : ''} ${!!angle.id && isSaved ? 'cursor-move' : ''}`}
+      draggable={!!angle.id && isSaved}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex gap-2">
